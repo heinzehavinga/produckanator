@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+        }
+        
+        #soundcloud {
+            position: absolute;
+            height: 150px;
+            width: 300px;
+            top: 10px;
+            left: 5px;
+        }
+        
+        #giphy {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: -100;
+        }
+        
+        #tweets {
+            width: 960px;
+            height: 300px;
+            margin: 20% auto;
+            font-family: Courier New, Courier, Lucida Sans Typewriter, Lucida Typewriter, monospace;
+            text-shadow: 2px 2px #000;
+            text-align: center;
+            color: white;
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+        
+        #form {
+            position: absolute;
+            right: 0;
+            top: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div>
+        <form id="form">
+            <input id="search" name="search" type="text" value="robots" /> </form>
+    </div>
+    <div id="soundcloud"></div>
+    <div id="giphy"></div>
+    <div id="tweets"></div>
+    <!--    Jquery because quick DOM things are fun-->
+    <script src="https://code.jquery.com/jquery-3.1.0.min.js"></script>
+    <!--    Soundcloud SDK for soundcloud things-->
+    <script src="https://connect.soundcloud.com/sdk/sdk-3.1.2.js"></script>
+    <!--    Soundcloud player api, so we can listen to events in the player -->
+    <script src="https://w.soundcloud.com/player/api.js"></script>
+    <script>
+        //Twitter
+        var tweetInterval,tweets;
+        var curTweetIndex = 0;
+        var patt = /RT|:|@|#|http\S*/g;
+        
+        //Soundcloud
+        var soundCloudKey = 'fdf47dd2dfcc83a5d11ab71942e4c476';
+        var trackList;
+        var curSoundIndex = 0;
+        var widgetObject;
+        //https://developers.google.com/web/updates/2014/01/Web-apps-that-talk-Introduction-to-the-Speech-Synthesis-API
+        var msg = new SpeechSynthesisUtterance();
+        msg.volume = 1;
+//        msg.lang = 'nl-NL';
+        
+        $(function () {
+                
+               //Sets up soundCloud
+            SC.initialize({
+                client_id: soundCloudKey
+            });
+            
+            //Fire the first one for free!
+            goCrazy($("#search").val());
+            
+            //Fire the produckanator every time you fire the form.
+            $("form").submit(function (e, data) {
+                e.preventDefault();
+                goCrazy($("#search").val());
+            })
+        });
+
+        //New round of the produckanator
+        function goCrazy(text) {     
+            
+            //Get gifs! documentation here: https://github.com/Giphy/GiphyAPI
+            //First up, we call the right URL
+            $.getJSON("http://api.giphy.com/v1/gifs/search", {
+                //Parameters are important, this call has two!
+//                q (stand for query): what would you like to search?
+                q: text
+                //api_key is like a password and identifier in one easy hash
+                , api_key: "dc6zaTOxFJmzC"
+                //If this data comes in do something
+            , }).done(function (data) {
+                //In this case grab the first result and add it to the screen.
+                $("#giphy").html("<img src='" + data.data[0].images.original.url + "' width='100%' height='100%'/>");
+            });
+            
+             //Get tweets, pretty much the same thing, only we made our own API
+            $.getJSON("twitter.php", {
+                q: text
+             }).done(function (data) {
+                tweets = data.statuses;
+                //We don't wanna show one tweet, we want to cycle through them
+                //So we need an interaval
+                var tweet = tweets[0].text.replace(patt,"")
+                $("#tweets").text(tweet);
+                curTweetIndex++;
+                
+                clearInterval(tweetInterval);
+                tweetInterval = setInterval(function(){ 
+                                        widgetTest.setVolume(0.5);
+                                        var tweet = tweets[curTweetIndex].text.replace(patt,"")
+                                        $("#tweets").text(tweet);
+                                        msg.text = tweet;
+                                        window.speechSynthesis.speak(msg);
+                                        curTweetIndex++;
+                                        if (curTweetIndex >= tweets.length) {
+                                            curTweetIndex = 0;
+                                        }
+                                        }, 12000);
+            });
+            
+            // find 120bpm instrumental tracks with a cc-by-sa license
+            SC.get('/tracks', {
+                genres: 'instrumental'
+                , bpm: {
+                    from: 120
+                }
+                , license: 'cc-by-sa'
+            }).then(function (tracks) {
+                trackList = tracks;
+                
+                setupPlayer(trackList[curSoundIndex]);
+            });
+            
+        }
+        
+        //Setting up SoundCloud player
+        function setupPlayer(track) {
+            var track_url = track.permalink_url;
+            SC.oEmbed(track_url, {
+                auto_play: true
+            }).then(function (oEmbed) {
+                $("#soundcloud").html(oEmbed.html);
+                $("#soundcloud iframe").attr("height", "100%")
+                
+                //Adding a listener object so we can start a new tracks once one is over.
+                var iframeElement = document.querySelector('iframe');
+                widgetTest = SC.Widget(iframeElement);
+                
+                widgetTest.bind(SC.Widget.Events.FINISH, nextTrack);                
+                
+                curSoundIndex++;
+                if (curSoundIndex >= trackList.length()) {
+                    curSoundIndex = 0;
+                }
+            });
+
+        }
+
+        function nextTrack(e) {
+            setupPlayer(trackList[curIndex]);
+        }
+        
+        
+    </script>
+</body>
+
+</html>
